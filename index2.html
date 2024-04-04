@@ -32,7 +32,7 @@
             },
             {
                 name: "Ocean",
-                colors: ["#0077B6", "#0096C7", "#00B4D8", "#48CAE4"],
+                colors: ["#b2ff9e", "#affc41", "#1dd3b0"],
             },
             {
                 name: "Forest",
@@ -43,7 +43,7 @@
                 colors: ["#FFC6FF", "#FF61A6", "#FF61A6", "#FFAAFF"],
             },
         ];
-        let currentTheme = colorThemes[0]; //
+        let currentTheme = colorThemes[1]; //
         function applyTheme(theme) {
             frameColor = random(theme.colors); // Update the frame color
 
@@ -164,77 +164,93 @@
             }
         }
 
-        class CirclePattern {
-            constructor(radius) {
-                this.radius = radius;
+        class SwirlingVortexPattern {
+            constructor(maxRadius) {
+                this.maxRadius = maxRadius; // Maximum radius of the swirl
             }
 
             getTargetPosition(pixel) {
-                let angle = pixel.offsetAngle + frameCount * 0.01;
-                let x = width / 2 + this.radius * cos(angle);
-                let y = height / 2 + this.radius * sin(angle);
+                // Increase the angle to make the particle swirl
+                pixel.offsetAngle += 0.05;
+
+                // Calculate the radius from the center of the canvas based on the pixel's offset angle
+                let radius = (pixel.offsetAngle % TWO_PI) / TWO_PI * this.maxRadius;
+
+                // Calculate the x and y positions
+                let x = width / 2 + radius * cos(pixel.offsetAngle);
+                let y = height / 2 + radius * sin(pixel.offsetAngle);
+
                 return { x, y };
             }
         }
 
-        class TrianglePattern {
-            constructor(radius) {
-                this.radius = radius;
-                this.vertices = [
-                    createVector(width / 2, height / 2 - this.radius),
-                    createVector(
-                        width / 2 - this.radius * sin(PI / 3),
-                        height / 2 + this.radius / 2
-                    ),
-                    createVector(
-                        width / 2 + this.radius * sin(PI / 3),
-                        height / 2 + this.radius / 2
-                    ),
-                ];
+        class InfinityPattern {
+            constructor(size) {
+                this.size = size;
             }
 
             getTargetPosition(pixel) {
-                pixel.offsetAngle += 0.01; // Increment the angle to move the pixel
-                let totalLength = this.radius * 3 * sqrt(3); // Total perimeter of the triangle
-                let currentLength = ((pixel.offsetAngle % TWO_PI) / TWO_PI) * totalLength; // Current position along the perimeter
-                let edgeLength = this.radius * sqrt(3); // Length of one edge
-                let edgeIndex = Math.floor(currentLength / edgeLength); // Determine the current edge
-                let lerpFactor = (currentLength % edgeLength) / edgeLength; // Factor for interpolation along the current edge
-
-                let targetVertex = this.vertices[edgeIndex % 3];
-                let nextVertex = this.vertices[(edgeIndex + 1) % 3];
-                let x = lerp(targetVertex.x, nextVertex.x, lerpFactor);
-                let y = lerp(targetVertex.y, nextVertex.y, lerpFactor);
+                // Map pixel's angle to a point on the infinity symbol
+                let t = map(pixel.offsetAngle, 0, TWO_PI, -PI, PI);
+                let r = (2 / (3 - cos(2 * t)));
+                let x = r * cos(t) * this.size + width / 2;
+                let y = r * sin(2 * t) / 2 * this.size + height / 2;
                 return { x, y };
             }
         }
 
-        class SquarePattern {
-            constructor(radius) {
-                this.radius = radius;
-                this.vertices = [
-                    createVector(width / 2 - this.radius, height / 2 - this.radius),
-                    createVector(width / 2 + this.radius, height / 2 - this.radius),
-                    createVector(width / 2 + this.radius, height / 2 + this.radius),
-                    createVector(width / 2 - this.radius, height / 2 + this.radius),
-                ];
+        class GalaxySwirlPattern extends State {
+            constructor(pixels) {
+                super(pixels);
+                this.center = createVector(width / 2, height / 2); // Center of the cross/X
+                this.angleOffset = 0; // Initial angle offset for rotation
+                this.initializePixels(); // Position the pixels initially to form an X
             }
 
-            getTargetPosition(pixel) {
-                pixel.offsetAngle += 0.01; // Increment the angle to move the pixel
-                let totalLength = this.radius * 8; // Total perimeter of the square
-                let currentLength = ((pixel.offsetAngle % TWO_PI) / TWO_PI) * totalLength; // Current position along the perimeter
-                let edgeLength = this.radius * 2; // Length of one edge
-                let edgeIndex = Math.floor(currentLength / edgeLength); // Determine the current edge
-                let lerpFactor = (currentLength % edgeLength) / edgeLength; // Factor for interpolation along the current edge
+            initializePixels() {
+                // Position the pixels along two diagonal lines to form an X
+                let totalPixels = this.pixels.length;
+                for (let i = 0; i < totalPixels; i++) {
+                    let pixel = this.pixels[i];
+                    let progress = i / totalPixels;
+                    let angle = PI / 4 + (i % 2) * PI / 2; // Alternate between the two arms of the X
+                    let radius = progress * (min(width, height) / 2 * 0.8);
 
-                let targetVertex = this.vertices[edgeIndex % 4];
-                let nextVertex = this.vertices[(edgeIndex + 1) % 4];
-                let x = lerp(targetVertex.x, nextVertex.x, lerpFactor);
-                let y = lerp(targetVertex.y, nextVertex.y, lerpFactor);
-                return { x, y };
+                    pixel.initialX = this.center.x + cos(angle) * radius;
+                    pixel.initialY = this.center.y + sin(angle) * radius;
+
+                    // Reset the current position to the initial position
+                    pixel.x = pixel.initialX;
+                    pixel.y = pixel.initialY;
+                }
+            }
+
+            update() {
+                this.angleOffset += 0.01; // Increment the angle for rotation
+
+                this.pixels.forEach(pixel => {
+                    let initialAngle = atan2(pixel.initialY - this.center.y, pixel.initialX - this.center.x);
+                    let radius = dist(pixel.initialX, pixel.initialY, this.center.x, this.center.y);
+                    let angle = initialAngle + this.angleOffset;
+
+                    pixel.x = this.center.x + cos(angle) * radius;
+                    pixel.y = this.center.y + sin(angle) * radius;
+                });
+            }
+
+            display() {
+                this.pixels.forEach(pixel => pixel.display());
+            }
+
+            // Method to return pixels to their initial state
+            resetToInitialState() {
+                this.pixels.forEach(pixel => {
+                    pixel.x = pixel.initialX;
+                    pixel.y = pixel.initialY;
+                });
             }
         }
+
 
         function drawFrame() {
             stroke(frameColor);
@@ -243,39 +259,53 @@
         }
 
         function drawButtons() {
-            let buttonSize = 50; // Size of each button
-            let spacing = 20; // Spacing between buttons
-            let startY = height - 60; // Adjusted to draw buttons within the canvas
-            let startX = width / 2 - (1.5 * buttonSize + spacing); // Center buttons horizontally
+            let startY = height - 60; // Position buttons just above the bottom of the canvas
+            let startX = width / 2 - (buttonSize * 1.5 + spacing * 2); // Adjust startX to fit three buttons
 
             fill(bgColor); // Set a fill color to ensure visibility
             stroke(frameColor); // Outline color for buttons and shapes
 
-            // Square button with a circle inside
-            rect(startX, startY, buttonSize, buttonSize);
-            ellipse(startX + buttonSize / 2, startY + buttonSize / 2, buttonSize / 2);
+            // Swirling Vortex Pattern Button
+            let vortexButtonX = startX;
+            rect(vortexButtonX, startY, buttonSize, buttonSize);
+            push();
+            translate(vortexButtonX + buttonSize / 2, startY + buttonSize / 2);
+            noFill();
+            beginShape();
+            for (let t = 0; t < TWO_PI; t += 0.1) {
+                let r = buttonSize / 4 * (1 + sin(5 * t));
+                let x = r * cos(t);
+                let y = r * sin(t);
+                vertex(x, y);
+            }
+            endShape();
+            pop();
 
-            // Square button with a square inside
-            let squareButtonX = startX + buttonSize + spacing;
-            rect(squareButtonX, startY, buttonSize, buttonSize);
-            rect(
-                squareButtonX + buttonSize / 4,
-                startY + buttonSize / 4,
-                buttonSize / 2,
-                buttonSize / 2
-            );
+            // Random Wandering Pattern Button
+            let wanderingButtonX = vortexButtonX + buttonSize + spacing;
+            rect(wanderingButtonX, startY, buttonSize, buttonSize);
+            push();
+            translate(wanderingButtonX + buttonSize / 2, startY + buttonSize / 2);
+            textSize(18);
+            textAlign(CENTER, CENTER);
+            text('?', 0, 0);
+            pop();
 
-            // Square button with a triangle inside
-            let triangleButtonX = squareButtonX + buttonSize + spacing;
-            rect(triangleButtonX, startY, buttonSize, buttonSize);
-            triangle(
-                triangleButtonX + buttonSize / 2,
-                startY + buttonSize / 4,
-                triangleButtonX + buttonSize / 4,
-                startY + (3 * buttonSize) / 4,
-                triangleButtonX + (3 * buttonSize) / 4,
-                startY + (3 * buttonSize) / 4
-            );
+            // Infinity Symbol Button
+            let infinityButtonX = wanderingButtonX + buttonSize + spacing;
+            rect(infinityButtonX, startY, buttonSize, buttonSize);
+            push();
+            translate(infinityButtonX + buttonSize / 2, startY + buttonSize / 2);
+            noFill();
+            beginShape();
+            for (let t = 0; t < TWO_PI; t += 0.1) {
+                let r = (2 / (3 - cos(2 * t)));
+                let x = r * cos(t) * buttonSize / 8;
+                let y = r * sin(2 * t) / 2 * buttonSize / 8;
+                vertex(x, y);
+            }
+            endShape();
+            pop();
         }
 
         function updateButtonPositions() {
@@ -287,50 +317,30 @@
             let buttonSize = 50;
             let spacing = 20;
             let startY = height - 60; // This should match the startY in drawButtons()
-            let startX = width / 2 - (1.5 * buttonSize + spacing);
+            let startX = width / 2 - (1.5 * buttonSize + spacing); // Adjust to center the buttons
 
-            // Circle button click detection
-            if (
-                mouseX > startX &&
-                mouseX < startX + buttonSize &&
-                mouseY > startY &&
-                mouseY < startY + buttonSize
-            ) {
-                currentState = new CongregatedState(
-                    pixels,
-                    new CirclePattern(circlePathRadius)
-                );
-                console.log("Circle button clicked"); // Debugging log
+            // Swirling Vortex Pattern Button (Leftmost Button)
+            let vortexButtonX = startX;
+            if (mouseX > vortexButtonX && mouseX < vortexButtonX + buttonSize && mouseY > startY && mouseY < startY + buttonSize) {
+                console.log("Swirling Vortex Pattern Activated");
+                currentState = new CongregatedState(pixels, new SwirlingVortexPattern(min(width, height) / 2));
+                return; // Immediately exit the function to prevent other conditions from being checked
             }
 
-            // Square button click detection
-            let squareButtonX = startX + buttonSize + spacing;
-            if (
-                mouseX > squareButtonX &&
-                mouseX < squareButtonX + buttonSize &&
-                mouseY > startY &&
-                mouseY < startY + buttonSize
-            ) {
-                currentState = new CongregatedState(
-                    pixels,
-                    new SquarePattern(circlePathRadius)
-                );
-                console.log("Square button clicked"); // Debugging log
+            // Infinity Symbol Button (Middle Button)
+            let infinityButtonX = vortexButtonX + buttonSize + spacing; // Position for the Infinity button
+            if (mouseX > infinityButtonX && mouseX < infinityButtonX + buttonSize && mouseY > startY && mouseY < startY + buttonSize) {
+                console.log("Infinity Pattern Activated");
+                currentState = new CongregatedState(pixels, new InfinityPattern(circlePathRadius)); // Activates the Infinity Pattern
+                return; // Immediately exit the function to prevent other conditions from being checked
             }
 
-            // Triangle button click detection
-            let triangleButtonX = squareButtonX + buttonSize + spacing;
-            if (
-                mouseX > triangleButtonX &&
-                mouseX < triangleButtonX + buttonSize &&
-                mouseY > startY &&
-                mouseY < startY + buttonSize
-            ) {
-                currentState = new CongregatedState(
-                    pixels,
-                    new TrianglePattern(circlePathRadius)
-                );
-                console.log("Triangle button clicked"); // Debugging log
+            // Galaxy Swirl Pattern Button (Rightmost Button)
+            let galaxyButtonX = infinityButtonX + buttonSize + spacing; // Position for the Galaxy button
+            if (mouseX > galaxyButtonX && mouseX < galaxyButtonX + buttonSize && mouseY > startY && mouseY < startY + buttonSize) {
+                console.log("Galaxy Swirl Pattern Activated");
+                currentState = new GalaxySwirlPattern(pixels); // Activates the Galaxy Swirl Pattern
+                return; // Immediately exit the function to prevent other conditions from being checked
             }
         }
 
